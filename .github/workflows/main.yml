@@ -1,36 +1,96 @@
 name: Build Taxi Assistant APK
+
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, 'claude/**' ]
+  pull_request:
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Unpack project source archive
+
+      # Единственный источник исходников определяется явно и печатается в лог:
+      #  1) если в корне репозитория лежит taxist-source.zip — собирается ТОЛЬКО его содержимое
+      #     (распаковывается в чистую временную папку, старые файлы репозитория игнорируются);
+      #  2) иначе собирается дерево самого репозитория.
+      - name: Select project source
+        id: src
+        shell: bash
         run: |
-          test -f taxist-source.zip
-          rm -rf /tmp/taxist-source
-          mkdir -p /tmp/taxist-source
-          unzip -q taxist-source.zip -d /tmp/taxist-source
-          # Remove stale Android sources from the repository to avoid duplicate classes.
-          rm -rf app/src/main
-          cp -R /tmp/taxist-source/. .
-      - name: Set up Java
+          set -euo pipefail
+          if [ -f taxist-source.zip ]; then
+            echo "SOURCE: taxist-source.zip"
+            sha256sum taxist-source.zip
+            DEST="$RUNNER_TEMP/project"
+            rm -rf "$DEST"; mkdir -p "$DEST"
+            unzip -q taxist-source.zip -d "$DEST"
+            SETTINGS=$(find "$DEST" -maxdepth 2 -name settings.gradle.kts | head -n 1)
+            test -n "$SETTINGS" || { echo "ERROR: settings.gradle.kts не найден внутри taxist-source.zip"; exit 1; }
+            DIR=$(dirname "$SETTINGS")
+          else
+            echo "SOURCE: repository tree"
+            DIR="$GITHUB_WORKSPACE"
+          fi
+          echo "PROJECT DIR: $DIR"
+          test -f "$DIR/app/src/main/java/com/shugarich/taxist/MainActivity.kt" || { echo "ERROR: MainActivity.kt не найден"; exit 1; }
+          COUNT=$(find "$DIR/app/src/main" -name 'MainActivity.*' | wc -l)
+          echo "MainActivity files: $COUNT"
+          test "$COUNT" = "1" || { echo "ERROR: дубликаты MainActivity"; find "$DIR/app/src/main" -name 'MainActivity.*'; exit 1; }
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Gradle
+
+      - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build APK
-        run: gradle assembleDebug --stacktrace
+          build-root-directory: ${{ steps.src.outputs.dir }}
+
+      - name: Unit tests and Debug APK
+        working-directory: ${{ steps.src.outputs.dir }}
+        run: gradle --no-daemon testDebugUnitTest assembleDebug --stacktrace
+
+      - name: Verify APK file exists
+        working-directory: ${{ steps.src.outputs.dir }}
+        run: |
+          ls -l app/build/outputs/apk/debug/
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: taxi-assistant-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.src.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            ${{ steps.src.outputs.dir }}/app/build/reports/tests
+            ${{ steps.src.outputs.dir }}/app/build/test-results
+          if-no-files-found: ignore
+
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            ${{ steps.src.outputs.dir }}/app/build/reports
+            ${{ steps.src.outputs.dir }}/build/reports
+          if-no-files-found: ignore
