@@ -9,42 +9,30 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 class MainActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(28, 28, 28, 28)
-            setBackgroundColor(Color.rgb(18, 18, 18))
-        }
+        val root = LinearLayout(this)
+        root.orientation = LinearLayout.VERTICAL
+        root.gravity = Gravity.CENTER
+        root.setPadding(28, 28, 28, 28)
+        root.setBackgroundColor(Color.rgb(18, 18, 18))
 
-        val title = TextView(this).apply {
-            text = "ТАКСИСТ"
-            textSize = 30f
-            setTextColor(Color.rgb(255, 193, 7))
-            gravity = Gravity.CENTER
-        }
+        val title = TextView(this)
+        title.text = "ТАКСИСТ"
+        title.textSize = 30f
+        title.setTextColor(Color.rgb(255, 193, 7))
+        title.gravity = Gravity.CENTER
 
-        val subtitle = TextView(this).apply {
-            text = "Помощник водителя"
-            textSize = 18f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(0, 12, 0, 32)
-        }
-
-        val status = TextView(this).apply {
-            text = "Версия 1.0\\n\\nАнализ заказов — скоро"
-            textSize = 16f
-            setTextColor(Color.LTGRAY)
-            gravity = Gravity.CENTER
-        }
+        val info = TextView(this)
+        info.text = "Помощник водителя\n\nПервый запуск успешен!"
+        info.textSize = 18f
+        info.setTextColor(Color.WHITE)
+        info.gravity = Gravity.CENTER
+        info.setPadding(0, 24, 0, 0)
 
         root.addView(title)
-        root.addView(subtitle)
-        root.addView(status)
+        root.addView(info)
         setContentView(root)
     }
 }
