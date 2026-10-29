@@ -12,8 +12,11 @@ jobs:
       - name: Unpack project source archive
         run: |
           test -f taxist-source.zip
+          rm -rf /tmp/taxist-source
           mkdir -p /tmp/taxist-source
           unzip -q taxist-source.zip -d /tmp/taxist-source
+          # Remove stale Android sources from the repository to avoid duplicate classes.
+          rm -rf app/src/main
           cp -R /tmp/taxist-source/. .
       - name: Set up Java
         uses: actions/setup-java@v4
